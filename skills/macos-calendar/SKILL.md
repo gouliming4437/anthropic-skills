@@ -1,11 +1,11 @@
 ---
 name: macos-calendar
-description: Manipulate macOS Calendar.app events and reminders using Python and the EventKit framework. Use this skill when the user wants to create, read, update, or delete calendar events, list calendars, query upcoming events, or automate calendar-related tasks on macOS.
+description: Manipulate macOS Calendar.app events and Reminders.app using Python and the EventKit framework. Use this skill when the user wants to create, read, update, or delete calendar events or reminders, list calendars/reminder lists, query upcoming events or tasks, or automate calendar and reminder-related tasks on macOS.
 ---
 
-# macOS Calendar Skill
+# macOS Calendar & Reminders Skill
 
-Manipulate macOS Calendar.app using the native EventKit framework via Python.
+Manipulate macOS Calendar.app and Reminders.app using the native EventKit framework via Python.
 
 ## Requirements
 
@@ -16,11 +16,13 @@ conda activate pytest
 pip install pyobjc-framework-EventKit
 ```
 
-**First-run permission**: macOS will prompt for Calendar access the first time the script runs. The user must grant this permission.
+**First-run permission**: macOS will prompt for Calendar and Reminders access the first time. The user must grant these permissions.
 
 ## Usage
 
 Always use the wrapper script `scripts/calendar.sh` which handles conda environment activation:
+
+### Event Commands
 
 ```bash
 # List calendars
@@ -33,10 +35,10 @@ bash scripts/calendar.sh list-events
 bash scripts/calendar.sh list-events --start 2025-01-01 --end 2025-01-31
 
 # Create event
-bash scripts/calendar.sh create "Meeting" --start "2025-01-15T10:00:00" --duration 60
+bash scripts/calendar.sh create-event "Meeting" --start "2025-01-15T10:00:00" --duration 60
 
 # Create event with details
-bash scripts/calendar.sh create "Team Sync" \
+bash scripts/calendar.sh create-event "Team Sync" \
     --start "2025-01-15T14:00:00" \
     --end "2025-01-15T15:00:00" \
     --calendar "Work" \
@@ -44,7 +46,42 @@ bash scripts/calendar.sh create "Team Sync" \
     --notes "Weekly sync"
 
 # Delete event
-bash scripts/calendar.sh delete <event_id>
+bash scripts/calendar.sh delete-event <event_id>
+```
+
+### Reminder Commands
+
+```bash
+# List reminder lists
+bash scripts/calendar.sh list-reminder-lists
+
+# List incomplete reminders
+bash scripts/calendar.sh list-reminders
+
+# List reminders from specific list
+bash scripts/calendar.sh list-reminders --list "Shopping"
+
+# List all reminders including completed
+bash scripts/calendar.sh list-reminders --include-completed
+
+# Create reminder
+bash scripts/calendar.sh create-reminder "Buy groceries"
+
+# Create reminder with due date and priority
+bash scripts/calendar.sh create-reminder "Submit report" \
+    --due "2025-01-15T17:00:00" \
+    --list "Work" \
+    --priority 1 \
+    --notes "Q4 quarterly report"
+
+# Mark reminder as completed
+bash scripts/calendar.sh complete-reminder <reminder_id>
+
+# Mark reminder as incomplete
+bash scripts/calendar.sh complete-reminder <reminder_id> --undo
+
+# Delete reminder
+bash scripts/calendar.sh delete-reminder <reminder_id>
 ```
 
 ## Python API
@@ -56,7 +93,9 @@ from calendar_utils import CalendarManager
 from datetime import datetime, timedelta
 
 mgr = CalendarManager()
-mgr.request_event_access()  # Required before any operations
+
+# ===== EVENTS =====
+mgr.request_event_access()  # Required before event operations
 
 # List all calendars
 calendars = mgr.list_calendars()
@@ -66,7 +105,7 @@ event = mgr.create_event(
     title="Team Meeting",
     start=datetime(2025, 1, 15, 10, 0),
     end=datetime(2025, 1, 15, 11, 0),
-    calendar_name="Work",  # Optional, uses default if omitted
+    calendar_name="Work",
     location="Conference Room A",
     notes="Discuss Q1 planning",
 )
@@ -80,6 +119,36 @@ mgr.update_event(event["event_id"], title="Updated Meeting Title")
 
 # Delete an event
 mgr.delete_event(event["event_id"])
+
+# ===== REMINDERS =====
+mgr.request_reminder_access()  # Required before reminder operations
+
+# List all reminder lists
+lists = mgr.list_reminder_lists()
+
+# Create a reminder
+reminder = mgr.create_reminder(
+    title="Buy milk",
+    due_date=datetime(2025, 1, 15, 18, 0),
+    list_name="Shopping",
+    notes="Whole milk",
+    priority=5,  # 0=none, 1=high, 5=medium, 9=low
+)
+
+# Get incomplete reminders
+reminders = mgr.get_reminders()
+
+# Get all reminders including completed
+all_reminders = mgr.get_reminders(include_completed=True)
+
+# Mark as completed
+mgr.complete_reminder(reminder["reminder_id"])
+
+# Update a reminder
+mgr.update_reminder(reminder["reminder_id"], title="Buy oat milk", priority=1)
+
+# Delete a reminder
+mgr.delete_reminder(reminder["reminder_id"])
 ```
 
 ## API Reference

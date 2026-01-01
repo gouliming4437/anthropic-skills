@@ -299,13 +299,259 @@ class CalendarManager:
             "calendar": event.calendar().title(),
         }
 
+    # ==================== REMINDER METHODS ====================
+
+    def list_reminder_lists(self) -> list[dict]:
+        """List all available reminder lists."""
+        calendars = self.store.calendarsForEntityType_(EKEntityTypeReminder)
+        
+        return [
+            {
+                "title": cal.title(),
+                "calendar_id": cal.calendarIdentifier(),
+                "allows_modifications": cal.allowsContentModifications(),
+                "color": str(cal.color()) if cal.color() else None,
+            }
+            for cal in calendars
+        ]
+
+    def get_reminder_list_by_name(self, name: str):
+        """Get a reminder list by its name."""
+        calendars = self.store.calendarsForEntityType_(EKEntityTypeReminder)
+        
+        for cal in calendars:
+            if cal.title() == name:
+                return cal
+        return None
+
+    def create_reminder(
+        self,
+        title: str,
+        due_date: Optional[datetime] = None,
+        list_name: Optional[str] = None,
+        notes: Optional[str] = None,
+        priority: int = 0,
+    ) -> dict:
+        """Create a new reminder.
+        
+        Args:
+            title: Reminder title
+            due_date: Due date/time (optional)
+            list_name: Name of reminder list (uses default if None)
+            notes: Reminder notes
+            priority: 0 = none, 1 = high, 5 = medium, 9 = low
+            
+        Returns:
+            Dict with reminder details including reminder_id
+        """
+        reminder = EKReminder.reminderWithEventStore_(self.store)
+        reminder.setTitle_(title)
+        
+        if due_date:
+            # Create date components for the due date
+            cal = NSCalendar.currentCalendar()
+            components = cal.components_fromDate_(
+                NSCalendar.NSCalendarUnitYear |
+                NSCalendar.NSCalendarUnitMonth |
+                NSCalendar.NSCalendarUnitDay |
+                NSCalendar.NSCalendarUnitHour |
+                NSCalendar.NSCalendarUnitMinute,
+                _nsdate_from_datetime(due_date)
+            )
+            reminder.setDueDateComponents_(components)
+        
+        if notes:
+            reminder.setNotes_(notes)
+        
+        reminder.setPriority_(priority)
+        
+        # Set reminder list
+        if list_name:
+            reminder_list = self.get_reminder_list_by_name(list_name)
+            if not reminder_list:
+                raise ValueError(f"Reminder list '{list_name}' not found")
+            reminder.setCalendar_(reminder_list)
+        else:
+            reminder.setCalendar_(self.store.defaultCalendarForNewReminders())
+        
+        # Save
+        success, error = self.store.saveReminder_commit_error_(reminder, True, None)
+        if not success:
+            raise RuntimeError(f"Failed to save reminder: {error}")
+        
+        return {
+            "reminder_id": reminder.calendarItemIdentifier(),
+            "title": title,
+            "due_date": due_date.isoformat() if due_date else None,
+            "list": reminder.calendar().title(),
+            "priority": priority,
+            "completed": False,
+        }
+
+    def get_reminders(
+        self,
+        list_names: Optional[list[str]] = None,
+        include_completed: bool = False,
+    ) -> list[dict]:
+        """Get reminders.
+        
+        Args:
+            list_names: Filter by reminder list names (all if None)
+            include_completed: Include completed reminders
+        """
+        calendars = None
+        if list_names:
+            calendars = [
+                self.get_reminder_list_by_name(name)
+                for name in list_names
+            ]
+            calendars = [c for c in calendars if c]
+        
+        if include_completed:
+            predicate = self.store.predicateForRemindersInCalendars_(calendars)
+        else:
+            predicate = self.store.predicateForIncompleteRemindersWithDueDateStarting_ending_calendars_(
+                None, None, calendars
+            )
+        
+        # Fetch reminders synchronously
+        import threading
+        reminders = [None]
+        event = threading.Event()
+        
+        def callback(result):
+            reminders[0] = result
+            event.set()
+        
+        self.store.fetchRemindersMatchingPredicate_completion_(predicate, callback)
+        event.wait(timeout=30)
+        
+        result = []
+        for r in (reminders[0] or []):
+            due_date = None
+            if r.dueDateComponents():
+                due_nsdate = NSCalendar.currentCalendar().dateFromComponents_(r.dueDateComponents())
+                if due_nsdate:
+                    due_date = _datetime_from_nsdate(due_nsdate).isoformat()
+            
+            result.append({
+                "reminder_id": r.calendarItemIdentifier(),
+                "title": r.title(),
+                "due_date": due_date,
+                "notes": r.notes(),
+                "priority": r.priority(),
+                "completed": r.isCompleted(),
+                "list": r.calendar().title(),
+            })
+        
+        return result
+
+    def complete_reminder(self, reminder_id: str, completed: bool = True) -> dict:
+        """Mark a reminder as completed or incomplete.
+        
+        Args:
+            reminder_id: The reminder identifier
+            completed: True to mark complete, False to mark incomplete
+        """
+        reminder = self.store.calendarItemWithIdentifier_(reminder_id)
+        if not reminder:
+            raise ValueError(f"Reminder '{reminder_id}' not found")
+        
+        reminder.setCompleted_(completed)
+        if completed:
+            from Foundation import NSDate
+            reminder.setCompletionDate_(NSDate.date())
+        else:
+            reminder.setCompletionDate_(None)
+        
+        success, error = self.store.saveReminder_commit_error_(reminder, True, None)
+        if not success:
+            raise RuntimeError(f"Failed to update reminder: {error}")
+        
+        return {
+            "reminder_id": reminder_id,
+            "title": reminder.title(),
+            "completed": completed,
+        }
+
+    def delete_reminder(self, reminder_id: str) -> bool:
+        """Delete a reminder by ID."""
+        reminder = self.store.calendarItemWithIdentifier_(reminder_id)
+        if not reminder:
+            raise ValueError(f"Reminder '{reminder_id}' not found")
+        
+        success, error = self.store.removeReminder_commit_error_(reminder, True, None)
+        if not success:
+            raise RuntimeError(f"Failed to delete reminder: {error}")
+        return True
+
+    def update_reminder(
+        self,
+        reminder_id: str,
+        title: Optional[str] = None,
+        due_date: Optional[datetime] = None,
+        notes: Optional[str] = None,
+        priority: Optional[int] = None,
+    ) -> dict:
+        """Update an existing reminder.
+        
+        Args:
+            reminder_id: The reminder identifier
+            title: New title (unchanged if None)
+            due_date: New due date (unchanged if None)
+            notes: New notes (unchanged if None)
+            priority: New priority (unchanged if None)
+        """
+        reminder = self.store.calendarItemWithIdentifier_(reminder_id)
+        if not reminder:
+            raise ValueError(f"Reminder '{reminder_id}' not found")
+        
+        if title is not None:
+            reminder.setTitle_(title)
+        if due_date is not None:
+            cal = NSCalendar.currentCalendar()
+            components = cal.components_fromDate_(
+                NSCalendar.NSCalendarUnitYear |
+                NSCalendar.NSCalendarUnitMonth |
+                NSCalendar.NSCalendarUnitDay |
+                NSCalendar.NSCalendarUnitHour |
+                NSCalendar.NSCalendarUnitMinute,
+                _nsdate_from_datetime(due_date)
+            )
+            reminder.setDueDateComponents_(components)
+        if notes is not None:
+            reminder.setNotes_(notes)
+        if priority is not None:
+            reminder.setPriority_(priority)
+        
+        success, error = self.store.saveReminder_commit_error_(reminder, True, None)
+        if not success:
+            raise RuntimeError(f"Failed to update reminder: {error}")
+        
+        due = None
+        if reminder.dueDateComponents():
+            due_nsdate = NSCalendar.currentCalendar().dateFromComponents_(reminder.dueDateComponents())
+            if due_nsdate:
+                due = _datetime_from_nsdate(due_nsdate).isoformat()
+        
+        return {
+            "reminder_id": reminder_id,
+            "title": reminder.title(),
+            "due_date": due,
+            "list": reminder.calendar().title(),
+            "priority": reminder.priority(),
+            "completed": reminder.isCompleted(),
+        }
+
 
 # CLI interface for testing
 if __name__ == "__main__":
     import argparse
     
-    parser = argparse.ArgumentParser(description="macOS Calendar CLI")
+    parser = argparse.ArgumentParser(description="macOS Calendar & Reminders CLI")
     subparsers = parser.add_subparsers(dest="command", required=True)
+    
+    # ===== EVENT COMMANDS =====
     
     # List calendars
     list_cal = subparsers.add_parser("list-calendars", help="List all calendars")
@@ -317,7 +563,7 @@ if __name__ == "__main__":
     list_events.add_argument("--days", type=int, default=7, help="Days from today (default: 7)")
     
     # Create event
-    create = subparsers.add_parser("create", help="Create new event")
+    create = subparsers.add_parser("create-event", help="Create new event")
     create.add_argument("title", help="Event title")
     create.add_argument("--start", required=True, help="Start datetime (ISO format)")
     create.add_argument("--end", help="End datetime (ISO format)")
@@ -328,17 +574,54 @@ if __name__ == "__main__":
     create.add_argument("--all-day", action="store_true", help="All-day event")
     
     # Delete event
-    delete = subparsers.add_parser("delete", help="Delete an event")
+    delete = subparsers.add_parser("delete-event", help="Delete an event")
     delete.add_argument("event_id", help="Event identifier")
     delete.add_argument("--future", action="store_true", help="Delete future occurrences")
+    
+    # ===== REMINDER COMMANDS =====
+    
+    # List reminder lists
+    list_rlists = subparsers.add_parser("list-reminder-lists", help="List all reminder lists")
+    
+    # List reminders
+    list_reminders = subparsers.add_parser("list-reminders", help="List reminders")
+    list_reminders.add_argument("--list", dest="list_name", help="Filter by reminder list name")
+    list_reminders.add_argument("--include-completed", action="store_true", help="Include completed reminders")
+    
+    # Create reminder
+    create_rem = subparsers.add_parser("create-reminder", help="Create new reminder")
+    create_rem.add_argument("title", help="Reminder title")
+    create_rem.add_argument("--due", help="Due datetime (ISO format)")
+    create_rem.add_argument("--list", dest="list_name", help="Reminder list name")
+    create_rem.add_argument("--notes", help="Reminder notes")
+    create_rem.add_argument("--priority", type=int, choices=[0, 1, 5, 9], default=0,
+                           help="Priority: 0=none, 1=high, 5=medium, 9=low")
+    
+    # Complete reminder
+    complete_rem = subparsers.add_parser("complete-reminder", help="Mark reminder as completed")
+    complete_rem.add_argument("reminder_id", help="Reminder identifier")
+    complete_rem.add_argument("--undo", action="store_true", help="Mark as incomplete instead")
+    
+    # Delete reminder
+    delete_rem = subparsers.add_parser("delete-reminder", help="Delete a reminder")
+    delete_rem.add_argument("reminder_id", help="Reminder identifier")
     
     args = parser.parse_args()
     
     mgr = CalendarManager()
     
-    if not mgr.request_event_access():
-        print("Error: Calendar access not granted", file=sys.stderr)
-        sys.exit(1)
+    # Request appropriate access based on command
+    if args.command in ["list-reminder-lists", "list-reminders", "create-reminder", 
+                        "complete-reminder", "delete-reminder"]:
+        if not mgr.request_reminder_access():
+            print("Error: Reminders access not granted", file=sys.stderr)
+            sys.exit(1)
+    else:
+        if not mgr.request_event_access():
+            print("Error: Calendar access not granted", file=sys.stderr)
+            sys.exit(1)
+    
+    # ===== EVENT HANDLERS =====
     
     if args.command == "list-calendars":
         calendars = mgr.list_calendars()
@@ -358,7 +641,7 @@ if __name__ == "__main__":
         events = mgr.get_events(start, end)
         print(json.dumps(events, indent=2, default=str))
     
-    elif args.command == "create":
+    elif args.command == "create-event":
         start = datetime.fromisoformat(args.start)
         if args.end:
             end = datetime.fromisoformat(args.end)
@@ -376,6 +659,36 @@ if __name__ == "__main__":
         )
         print(json.dumps(result, indent=2))
     
-    elif args.command == "delete":
+    elif args.command == "delete-event":
         mgr.delete_event(args.event_id, future_events=args.future)
         print(f"Deleted event: {args.event_id}")
+    
+    # ===== REMINDER HANDLERS =====
+    
+    elif args.command == "list-reminder-lists":
+        lists = mgr.list_reminder_lists()
+        print(json.dumps(lists, indent=2))
+    
+    elif args.command == "list-reminders":
+        list_names = [args.list_name] if args.list_name else None
+        reminders = mgr.get_reminders(list_names, args.include_completed)
+        print(json.dumps(reminders, indent=2, default=str))
+    
+    elif args.command == "create-reminder":
+        due_date = datetime.fromisoformat(args.due) if args.due else None
+        result = mgr.create_reminder(
+            title=args.title,
+            due_date=due_date,
+            list_name=args.list_name,
+            notes=args.notes,
+            priority=args.priority,
+        )
+        print(json.dumps(result, indent=2))
+    
+    elif args.command == "complete-reminder":
+        result = mgr.complete_reminder(args.reminder_id, completed=not args.undo)
+        print(json.dumps(result, indent=2))
+    
+    elif args.command == "delete-reminder":
+        mgr.delete_reminder(args.reminder_id)
+        print(f"Deleted reminder: {args.reminder_id}")
