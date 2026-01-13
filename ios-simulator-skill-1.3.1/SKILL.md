@@ -10,21 +10,26 @@ Build, test, and automate iOS applications using accessibility-driven navigation
 
 ## Quick Start
 
+This skill runs in the user's miniconda `pytest` environment:
+```bash
+conda activate pytest
+```
+
 ```bash
 # 1. Check environment
 bash scripts/sim_health_check.sh
 
 # 2. Launch app
-python scripts/app_launcher.py --launch com.example.app
+python3 scripts/app_launcher.py --launch com.example.app
 
 # 3. Map screen to see elements
-python scripts/screen_mapper.py
+python3 scripts/screen_mapper.py
 
 # 4. Tap button
-python scripts/navigator.py --find-text "Login" --tap
+python3 scripts/navigator.py --find-text "Login" --tap
 
 # 5. Enter text
-python scripts/navigator.py --find-type TextField --enter-text "user@example.com"
+python3 scripts/navigator.py --find-type TextField --enter-text "user@example.com"
 ```
 
 All scripts support `--help` for detailed options and `--json` for machine-readable output.
@@ -187,11 +192,11 @@ All scripts support `--help` for detailed options and `--json` for machine-reada
 ## Typical Workflow
 
 1. Verify environment: `bash scripts/sim_health_check.sh`
-2. Launch app: `python scripts/app_launcher.py --launch com.example.app`
-3. Analyze screen: `python scripts/screen_mapper.py`
-4. Interact: `python scripts/navigator.py --find-text "Button" --tap`
-5. Verify: `python scripts/accessibility_audit.py`
-6. Debug if needed: `python scripts/app_state_capture.py --app-bundle-id com.example.app`
+2. Launch app: `python3 scripts/app_launcher.py --launch com.example.app`
+3. Analyze screen: `python3 scripts/screen_mapper.py`
+4. Interact: `python3 scripts/navigator.py --find-text "Button" --tap`
+5. Verify: `python3 scripts/accessibility_audit.py`
+6. Debug if needed: `python3 scripts/app_state_capture.py --app-bundle-id com.example.app`
 
 ## Requirements
 
