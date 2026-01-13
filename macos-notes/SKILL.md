@@ -9,63 +9,69 @@ Manipulate Apple Notes using AppleScript via Python.
 
 ## Quick Start
 
+This skill runs in the user's miniconda `pytest` environment:
+
+```bash
+conda activate pytest
+```
+
 Run the script with Python:
 
 ```bash
-python scripts/notes_manager.py <command> [options]
+python3 scripts/notes_manager.py <command> [options]
 ```
 
 ## Available Commands
 
 ### List Folders
 ```bash
-python scripts/notes_manager.py list-folders
+python3 scripts/notes_manager.py list-folders
 ```
 
 ### List Notes
 ```bash
 # All notes
-python scripts/notes_manager.py list-notes
+python3 scripts/notes_manager.py list-notes
 
 # Notes in specific folder
-python scripts/notes_manager.py list-notes --folder "Work"
+python3 scripts/notes_manager.py list-notes --folder "Work"
 ```
 
 ### Create Note
 ```bash
-python scripts/notes_manager.py create --title "Meeting Notes" --body "Discussion points..."
+python3 scripts/notes_manager.py create --title "Meeting Notes" --body "Discussion points..."
 
 # In specific folder
-python scripts/notes_manager.py create --title "Meeting Notes" --body "Content" --folder "Work"
+python3 scripts/notes_manager.py create --title "Meeting Notes" --body "Content" --folder "Work"
 ```
 
 ### Read Note
 ```bash
 # Returns HTML content
-python scripts/notes_manager.py read --title "Meeting Notes"
+python3 scripts/notes_manager.py read --title "Meeting Notes"
 
 # Returns plaintext
-python scripts/notes_manager.py read --title "Meeting Notes" --plaintext
+python3 scripts/notes_manager.py read --title "Meeting Notes" --plaintext
 ```
 
 ### Search Notes
 ```bash
-python scripts/notes_manager.py search --query "project deadline"
+python3 scripts/notes_manager.py search --query "project deadline"
 ```
 
 ### Delete Note
 ```bash
-python scripts/notes_manager.py delete --title "Old Note"
+python3 scripts/notes_manager.py delete --title "Old Note"
 ```
 
 ### Create Folder
 ```bash
-python scripts/notes_manager.py create-folder --name "Projects"
+python3 scripts/notes_manager.py create-folder --name "Projects"
 ```
 
 ### Append to Note
 ```bash
-python scripts/notes_manager.py append --title "Daily Log" --text "New entry..."
+python3 scripts/notes_manager.py append --title "Daily Log" --text "New entry..."
 ```
 
 ## Output Format
@@ -95,5 +101,5 @@ First run will trigger macOS Automation permission dialog. Grant access to allow
 Create formatted notes using HTML:
 
 ```bash
-python scripts/notes_manager.py create --title "Formatted Note" --body "<h1>Header</h1><p>Paragraph with <b>bold</b> and <i>italic</i>.</p><ul><li>Item 1</li><li>Item 2</li></ul>"
+python3 scripts/notes_manager.py create --title "Formatted Note" --body "<h1>Header</h1><p>Paragraph with <b>bold</b> and <i>italic</i>.</p><ul><li>Item 1</li><li>Item 2</li></ul>"
 ```
