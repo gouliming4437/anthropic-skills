@@ -65,4 +65,4 @@ Path: `planning-with-files/`
 
 - Purpose: Use persistent markdown files for multi-step task planning and progress tracking.
 - Provides templates and scripts for `task_plan.md`, `findings.md`, and `progress.md`.
-- Entry point: `planning-with-files/SKILL.md` 
+- Entry point: `planning-with-files/SKILL.md`
